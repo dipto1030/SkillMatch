@@ -1,0 +1,9 @@
+node_modules/
+.env
+uploads/evidence/*
+uploads/icons/*
+!uploads/evidence/.gitkeep
+!uploads/icons/.gitkeep
+dist/
+.DS_Store
+*.log
