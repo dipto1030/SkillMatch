@@ -104,8 +104,9 @@ const matchService = {
     return rows;
   },
 
-  async getById(matchId) {
-    const { rows } = await db.query(
+  async getById(matchId, client) {
+    const queryFn = client || db;
+    const { rows } = await queryFn.query(
       `SELECT m.*, g.name as game_name, g.icon_url, g.max_duration_min, g.draws_possible,
               rp.label as rule_label,
               uc.display_name as creator_name, uc.rep_score as creator_rep,
@@ -157,7 +158,7 @@ const matchService = {
         [userId, matchId]
       );
 
-      const updated = await this.getById(matchId);
+      const updated = await this.getById(matchId, client);
       return updated;
     });
   },
@@ -225,7 +226,7 @@ const matchService = {
         );
       }
 
-      return await this.getById(matchId);
+      return await this.getById(matchId, client);
     });
   },
 
@@ -265,6 +266,7 @@ const matchService = {
       const proposal = proposals.find(p => p.id === proposalId);
       if (!proposal) throw Object.assign(new Error('Proposal not found.'), { status: 404 });
       if (proposal.proposer_id === userId) throw Object.assign(new Error('Cannot respond to own proposal.'), { status: 400 });
+      if (proposal.status !== 'pending') throw Object.assign(new Error('Proposal already responded to.'), { status: 400, code: 'VALIDATION_ERROR' });
 
       proposal.status = accept ? 'accepted' : 'declined';
       proposal.responded_at = new Date().toISOString();
@@ -303,7 +305,7 @@ const matchService = {
         return this._activateMatch(client, matchId, match);
       }
 
-      return await this.getById(matchId);
+      return await this.getById(matchId, client);
     });
   },
 
@@ -320,7 +322,7 @@ const matchService = {
       [matchId]
     );
 
-    return await this.getById(matchId);
+    return await this.getById(matchId, client);
   },
 
   async submitResult(userId, matchId, result, confirmed) {
@@ -360,7 +362,7 @@ const matchService = {
         // Create dispute automatically
         const disputeService = require('./disputeService');
         await disputeService.createFromRuleViolation(client, match, userId);
-        return await this.getById(matchId);
+        return await this.getById(matchId, client);
       }
 
       // Check if both submitted
@@ -371,7 +373,7 @@ const matchService = {
         return this._resolveResults(client, updated);
       }
 
-      return await this.getById(matchId);
+      return await this.getById(matchId, client);
     });
   },
 
@@ -401,14 +403,14 @@ const matchService = {
       if (!gameRows[0].draws_possible) {
         // Treated as conflict
         await client.query("UPDATE matches SET status = 'DISPUTED' WHERE id = $1", [match.id]);
-        return await this.getById(match.id);
+        return await this.getById(match.id, client);
       }
       return this._drawResult(client, match, stake, platformFee);
     }
 
     // Scenario D/F — Conflicting results → DISPUTE
     await client.query("UPDATE matches SET status = 'DISPUTED' WHERE id = $1", [match.id]);
-    return await this.getById(match.id);
+    return await this.getById(match.id, client);
   },
 
   async _awardWinner(client, match, winnerId, loserId, pot, fee) {
@@ -451,7 +453,7 @@ const matchService = {
     const scoreService = require('./scoreService');
     await scoreService.updateScores(client, match.game_id, winnerId, loserId);
 
-    return await this.getById(match.id);
+    return await this.getById(match.id, client);
   },
 
   async _mutualForfeit(client, match, stake, feePercent) {
@@ -475,7 +477,7 @@ const matchService = {
       [feePerPlayer * 2, match.id]
     );
 
-    return await this.getById(match.id);
+    return await this.getById(match.id, client);
   },
 
   async _drawResult(client, match, stake, feePercent) {

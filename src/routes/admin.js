@@ -117,9 +117,10 @@ router.post('/users/:id/ban', async (req, res, next) => {
           );
         }
       } else {
+        const days = parseInt(duration_days, 10) || 7;
         await client.query(
-          "UPDATE users SET is_banned = TRUE, ban_type = 'temp', ban_until = NOW() + INTERVAL '$1 days' WHERE id = $2",
-          [duration_days || 7, req.params.id]
+          `UPDATE users SET is_banned = TRUE, ban_type = 'temp', ban_until = NOW() + INTERVAL '${days} days' WHERE id = $1`,
+          [req.params.id]
         );
       }
 
